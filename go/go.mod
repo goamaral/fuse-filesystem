@@ -1,8 +1,7 @@
-module fuse-filesystem
+module fusefs
 
-go 1.19
+go 1.20
 
-require (
-	bazil.org/fuse v0.0.0-20221210232012-5a1c75a4f691 // indirect
-	golang.org/x/sys v0.0.0-20191210023423-ac6580df4449 // indirect
-)
+require bazil.org/fuse v0.0.0-20230120002735-62a210ff1fd5
+
+require golang.org/x/sys v0.7.0 // indirect
