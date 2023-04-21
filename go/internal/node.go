@@ -31,15 +31,17 @@ type FuseFSNode interface {
 	// fs.NodeSetxattrer
 	// fs.NodeRemovexattrer
 
-	// fs.HandleWriter
+	fs.HandleWriter
 }
 
 type fuseFSNode struct {
-	FS    FuseFS
-	Name  string
-	Inode uint64
-	Mode  os.FileMode
-	Nodes []*fuseFSNode
+	FS     FuseFS
+	Name   string
+	Inode  uint64
+	Mode   os.FileMode
+	Nodes  []*fuseFSNode
+	IsOpen bool
+	Data   []byte
 }
 
 func (n fuseFSNode) Attr(ctx context.Context, attr *fuse.Attr) error {
@@ -101,6 +103,34 @@ func (n *fuseFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node
 	return newNode, nil
 }
 
-func (n fuseFSNode) Open(ctx context.Context, req *fuse.OpenRequest, res *fuse.OpenResponse) (fs.Handle, error) {
+func (n *fuseFSNode) Open(ctx context.Context, req *fuse.OpenRequest, res *fuse.OpenResponse) (fs.Handle, error) {
+	n.IsOpen = true
 	return n, nil
+}
+
+/*
+Ignored fields
+
+	type WriteRequest struct {
+		Handle    HandleID
+		Offset    int64
+		Data      []byte
+		Flags     WriteFlags
+		LockOwner LockOwner
+		FileFlags OpenFlags
+	}
+
+	type WriteResponse struct {
+		Size int
+	}
+*/
+func (n fuseFSNode) Write(ctx context.Context, req *fuse.WriteRequest, res *fuse.WriteResponse) error {
+	if !n.IsOpen {
+		return syscall.EBADF
+	}
+	if req.FileFlags.IsReadOnly() {
+		// TODO
+	}
+
+	return nil
 }

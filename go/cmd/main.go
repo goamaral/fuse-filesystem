@@ -3,14 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	fusefs "fusefs/internal"
 	"log"
 	"os"
 	"os/signal"
-
-	"fusefs"
-
-	"bazil.org/fuse"
-	"bazil.org/fuse/fs"
 )
 
 func usage() {
@@ -26,34 +22,25 @@ func main() {
 		usage()
 		os.Exit(2)
 	}
-	mountpoint := flag.Arg(0)
 
-	log.Println("Mounting FUSE filesystem")
-	c, err := fuse.Mount(
-		mountpoint,
-		fuse.FSName("fusefs"),
-		fuse.Subtype("fusefs"),
-	)
+	fs := fusefs.NewFuseFS(flag.Arg(0))
+	err := fs.Mount()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln("MountErr", err)
 	}
-	defer func() {
-		log.Println("Closing FUSE connection")
-		c.Close()
-	}()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt)
 	go func() {
-		for range sigChan {
-			log.Println("Unmounting FUSE filesystem")
-			fuse.Unmount(mountpoint)
+		<-sigChan
+		err := fs.Unmount()
+		if err != nil {
+			log.Println("UnmountErr", err)
 		}
 	}()
 
-	server := fs.New(c, &fs.Config{Debug: func(msg interface{}) { fmt.Println(msg) }})
-	err = server.Serve(fusefs.NewFuseFS())
+	err = fs.Serve()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln("ServeErr", err)
 	}
 }
