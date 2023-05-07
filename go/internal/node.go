@@ -34,6 +34,10 @@ type FuseFSNode interface {
 	fs.HandleWriter
 }
 
+func NewFuseFSNode() FuseFSNode {
+	return &fuseFSNode{}
+}
+
 type fuseFSNode struct {
 	FS     FuseFS
 	Name   string
@@ -114,7 +118,6 @@ Ignored fields
 	type WriteRequest struct {
 		Handle    HandleID
 		Offset    int64
-		Data      []byte
 		Flags     WriteFlags
 		LockOwner LockOwner
 		FileFlags OpenFlags
@@ -124,13 +127,16 @@ Ignored fields
 		Size int
 	}
 */
-func (n fuseFSNode) Write(ctx context.Context, req *fuse.WriteRequest, res *fuse.WriteResponse) error {
+func (n *fuseFSNode) Write(ctx context.Context, req *fuse.WriteRequest, res *fuse.WriteResponse) error {
 	if !n.IsOpen {
 		return syscall.EBADF
 	}
 	if req.FileFlags.IsReadOnly() {
-		// TODO
+		return syscall.EBADF
 	}
+
+	n.Data = req.Data
+	res.Size = len(req.Data)
 
 	return nil
 }
