@@ -120,11 +120,6 @@ Ignored fields
 		Offset    int64
 		Flags     WriteFlags
 		LockOwner LockOwner
-		FileFlags OpenFlags
-	}
-
-	type WriteResponse struct {
-		Size int
 	}
 */
 func (n *fuseFSNode) Write(ctx context.Context, req *fuse.WriteRequest, res *fuse.WriteResponse) error {
