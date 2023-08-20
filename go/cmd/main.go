@@ -6,6 +6,7 @@ import (
 	fusefs "fusefs/internal"
 	"os"
 	"os/signal"
+	"syscall"
 )
 
 func usage() {
@@ -23,44 +24,42 @@ func main() {
 		os.Exit(2)
 	}
 
-	var path string
-	var err error
-	if nArgs == 0 {
-		path, err = os.MkdirTemp("/tmp", "fusefs-")
-		if err != nil {
-			fusefs.Fatalf("failed to create temp dir: %w", err)
-		}
-		fusefs.Infof("Created temporary filesystem at %s", path)
-
-		defer func() {
-			err := os.Remove(path)
-			if err != nil {
-				fusefs.Fatalf("failed to remove temp dir: %w", err)
-			}
-			fusefs.Infof("Removed temporary filesystem from %s", path)
-		}()
-	} else if nArgs == 1 {
+	path := "/tmp/fusefs"
+	if nArgs == 1 {
 		path = flag.Arg(0)
 	}
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		err = os.Mkdir(path, 0700)
+		if err != nil {
+			fusefs.Fatalf("failed to create %s: %v", path, err)
+		}
+		defer func() {
+			if err = os.Remove(path); err != nil {
+				fusefs.Fatalf("failed to remove %s: %v", path, err)
+			}
+		}()
+	} else if err != nil {
+		fusefs.Fatalf("failed to check if %s exists: %v", path, err)
+	}
+	fusefs.Infof("Mounted filesystem at %s", path)
 
 	fs := fusefs.NewFuseFS(path)
-	err = fs.Mount()
-	if err != nil {
+	if err = fs.Mount(); err != nil {
 		fusefs.Fatalf("failed to mount: %w", err)
 	}
 
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt)
+	signal.Notify(sigChan, os.Interrupt, os.Kill, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		err := fs.Unmount()
-		if err != nil {
+		fusefs.Infof("Unmounted filesystem from %s", path)
+		if err = fs.Unmount(); err != nil {
 			fusefs.Fatalf("failed to unmount: %w", err)
 		}
 	}()
 
-	err = fs.Serve()
-	if err != nil {
+	if err = fs.Serve(); err != nil {
 		fusefs.Fatalf("failed to serve: %w", err)
 	}
 }
