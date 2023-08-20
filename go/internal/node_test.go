@@ -1,61 +1,55 @@
-package fusefs_test
+package fusefs
 
 import (
-	"context"
-	fusefs "fusefs/internal"
 	"io/fs"
 	"os"
+	"strings"
 	"syscall"
 	"testing"
 
-	"bazil.org/fuse"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestFuseFSNodeWrite(t *testing.T) {
-	fileName := "TestFuseFSNodeWrite"
-	createdFile, err := os.Create(fileName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer createdFile.Close()
+func GenerateTestFile(t *testing.T, fsPath string) *os.File {
+	fileName := strings.ToLower(
+		strings.ReplaceAll(
+			strings.ReplaceAll(t.Name(), "/", "-"),
+			"_", "-",
+		),
+	)
+	file, err := os.CreateTemp(fsPath, fileName)
+	require.NoError(t, err)
 	t.Cleanup(func() {
-		os.Remove(fileName)
+		require.NoError(t, file.Close())
+		require.NoError(t, os.Remove(file.Name()))
 	})
 
-	t.Run("Write to closed file", func(t *testing.T) {
-		// TODO
-	})
+	return file
+}
 
-	t.Run("Write to read-only file", func(t *testing.T) {
-		n := fusefs.NewFuseFSNode()
-		_, err = n.Open(context.Background(), &fuse.OpenRequest{}, &fuse.OpenResponse{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		fuseErrno := n.Write(context.Background(), &fuse.WriteRequest{}, &fuse.WriteResponse{})
-
-		fileRO, err := os.Open(fileName)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer fileRO.Close()
-
-		_, err = fileRO.Write([]byte("test"))
-		assert.Error(t, err)
-		require.IsType(t, &fs.PathError{}, err)
-		pathErr := err.(*fs.PathError)
-		errno, ok := pathErr.Err.(syscall.Errno)
-		require.True(t, ok)
-		assert.Equal(t, errno, fuseErrno)
-	})
-
-	t.Run("Write to a directory", func(t *testing.T) {
-		// TODO
-	})
-
+func TestNode_Write(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		// TODO
+		generatedFile := GenerateTestFile(t, "/tmp/fusefs")
+		str := "hello"
+		n, err := generatedFile.WriteString(str)
+		assert.Equal(t, len(str), n)
+		require.NoError(t, err)
+	})
+
+	t.Run("FileIsReadOnly", func(t *testing.T) {
+		generatedFile := GenerateTestFile(t, "/tmp/fusefs")
+		file, err := os.OpenFile(generatedFile.Name(), os.O_RDONLY, 0)
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, file.Close()) })
+
+		n, err := file.WriteString("hello")
+		assert.Zero(t, n)
+		require.Error(t, err)
+		pathErr, ok := err.(*fs.PathError)
+		require.True(t, ok, "err is not *fs.PathError")
+		errno, ok := pathErr.Err.(syscall.Errno)
+		require.True(t, ok, "err is not syscall.Errno")
+		assert.Equal(t, syscall.EBADF, errno)
 	})
 }
